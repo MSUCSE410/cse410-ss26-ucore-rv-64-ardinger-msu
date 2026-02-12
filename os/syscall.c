@@ -39,6 +39,20 @@ uint64 sys_gettimeofday(TimeVal *val, int _tz)
 /*
 * LAB1: you may need to define sys_task_info here
 */
+int sys_task_info(struct TaskInfo *info) {
+	struct proc *p = curr_proc();
+
+	for (int i = 0; i < MAX_SYSCALL_NUM; i++) // TODO: change 500
+	{
+		info->syscall_times[i] = p->task_info.syscall_times[i];
+	}
+
+	uint64 curr_time = get_cycle()*1000/CPU_FREQ;
+	info->status = Running;
+	// p->task_info.syscall_times[SYS_task_info]++;
+	info->time = curr_time - p->task_info.time; // int?
+	return 0;
+}
 
 extern char trap_page[];
 
@@ -53,6 +67,8 @@ void syscall()
 	/*
 	* LAB1: you may need to update syscall counter for task info here
 	*/
+	curr_proc()->task_info.syscall_times[id]++;
+
 	switch (id) {
 	case SYS_write:
 		ret = sys_write(args[0], (char *)args[1], args[2]);
@@ -66,9 +82,9 @@ void syscall()
 	case SYS_gettimeofday:
 		ret = sys_gettimeofday((TimeVal *)args[0], args[1]);
 		break;
-	/*
-	* LAB1: you may need to add SYS_taskinfo case here
-	*/
+	case SYS_task_info:
+		ret = sys_task_info((struct TaskInfo *)args[0]); // TODO: no struct
+		break;
 	default:
 		ret = -1;
 		errorf("unknown syscall %d", id);
