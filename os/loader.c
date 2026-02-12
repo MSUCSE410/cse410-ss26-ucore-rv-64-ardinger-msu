@@ -70,6 +70,9 @@ int run_all_app()
 		/*
 		* LAB1: you may need to initialize your new fields of proc here
 		*/
+		p->task_info.status = UnInit;
+		memset(p->task_info.syscall_times, 0, sizeof(p->task_info.syscall_times));
+		p->task_info.time = 0;
 	}
 	return 0;
 }
