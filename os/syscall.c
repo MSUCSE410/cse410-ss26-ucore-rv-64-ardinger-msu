@@ -4,6 +4,7 @@
 #include "syscall_ids.h"
 #include "timer.h"
 #include "trap.h"
+#include "vm.h"
 
 uint64 sys_write(int fd, uint64 va, uint len)
 {
@@ -32,17 +33,25 @@ uint64 sys_sched_yield()
 	return 0;
 }
 
-uint64 sys_gettimeofday(TimeVal *val, int _tz) // TODO: implement sys_gettimeofday in pagetable. (VA to PA)
+uint64 sys_gettimeofday(TimeVal *val, int _tz) // TODO: implement sys_gettimeofday in pagetable. (VA to PA) virtual -> physical?
 {
 	// YOUR CODE
-	val->sec = 0;
-	val->usec = 0;
+	struct proc *p = curr_proc();
+
+	uint64 phys = useraddr(p->pagetable, (uint64)val); // Map VA to PA
+	if (phys == 0) {
+		return -1; // Bad addr
+	}
+
+	// val param cannot be accessed by the kernel now that we're using virtual memory
+	// Saves us from deref
+	TimeVal *new_val = (TimeVal *)phys; // Cast PA as a time value ptr
 
 	/* The code in `ch3` will leads to memory bugs*/
 
-	// uint64 cycle = get_cycle();
-	// val->sec = cycle / CPU_FREQ;
-	// val->usec = (cycle % CPU_FREQ) * 1000000 / CPU_FREQ;
+	uint64 cycle = get_cycle();
+	new_val->sec = cycle / CPU_FREQ;
+	new_val->usec = (cycle % CPU_FREQ) * 1000000 / CPU_FREQ;
 	return 0;
 }
 
@@ -55,15 +64,23 @@ uint64 sys_gettimeofday(TimeVal *val, int _tz) // TODO: implement sys_gettimeofd
 int sys_task_info(struct TaskInfo *info) {
 	struct proc *p = curr_proc();
 
-	for (int i = 0; i < MAX_SYSCALL_NUM; i++) // TODO: change 500
+	uint64 phys = useraddr(p->pagetable, (uint64)info); // Map VA to PA
+	if (phys == 0) {
+		return -1; // Bad addr
+	}
+
+	// info param cannot be accessed by the kernel now that we're using virtual memory
+	struct TaskInfo * new_info = (struct TaskInfo *)phys; // Cast PA to TaskInfo ptr
+
+	for (int i = 0; i < MAX_SYSCALL_NUM; i++) // TODO: this is static memory
 	{
-		info->syscall_times[i] = p->task_info.syscall_times[i];
+		new_info->syscall_times[i] = p->task_info.syscall_times[i];
 	}
 
 	uint64 curr_time = get_cycle()*1000/CPU_FREQ;
-	info->status = Running;
+	new_info->status = Running;
 	// p->task_info.syscall_times[SYS_task_info]++;
-	info->time = curr_time - p->task_info.time; // int?
+	new_info->time = curr_time - p->task_info.time; // int?
 	return 0;
 }
 
