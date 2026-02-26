@@ -82,7 +82,42 @@ int sys_task_info(struct TaskInfo *info) {
 }
 
 uint64 sys_mmap(uint64 start, uint64 len, int port, int flag, int fd) {
-	
+	struct proc *p = curr_proc();
+
+	if (len == 0) {
+		return -1; // No length
+	}
+
+	if (len > 1024 * 1024 * 1024) {
+		return -1; // Length is larger than 1 GB
+	}
+
+	if (port & ~0x7) {
+		return -1; // Other bits of port must be 0
+	}
+
+	if ((port & 0x7) == 0) {
+		return -1; // Cannot R, W, or X the memory
+	}
+
+	// Convert port into PTE perm bits. I.e. 010 = PTE_W
+	int perm = 0;
+	if (port & 0x1) {
+		perm |= PTE_R;
+	}
+	if (port & 0x2) {
+		perm |= PTE_W;
+	}
+	if (port & 0x4) {
+		perm |= PTE_X;
+	}
+
+	// TODO: request anon physical mem addr?
+
+	// TODO: check that no page exists already from [start, start + len) using walkaddr()
+
+	// TODO: allocate physical pages using mappages(). Use uvmunmap() to free pages if necessary
+	// return mappages(p->pagetable, start, len, , port)
 	return 0;
 }
 
