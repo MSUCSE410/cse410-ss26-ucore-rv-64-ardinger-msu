@@ -71,16 +71,18 @@ int sys_task_info(struct TaskInfo *info) {
 
 	// info param cannot be accessed by the kernel now that we're using virtual memory
 	struct TaskInfo * new_info = (struct TaskInfo *)phys; // Cast PA to TaskInfo ptr
+	new_info->status = p->task_info.status;
 
-	for (int i = 0; i < MAX_SYSCALL_NUM; i++) // TODO: this is static memory
-	{
-		new_info->syscall_times[i] = p->task_info.syscall_times[i];
-	}
+	// Copy syscall counts from current process to new task info using VA
+	memmove(new_info->syscall_times, p->task_info.syscall_times, sizeof(p->task_info.syscall_times));
 
 	uint64 curr_time = get_cycle()*1000/CPU_FREQ;
-	new_info->status = Running;
-	// p->task_info.syscall_times[SYS_task_info]++;
 	new_info->time = curr_time - p->task_info.time; // int?
+	return 0;
+}
+
+uint64 sys_mmap(uint64 start, uint64 len, int port, int flag, int fd) {
+	
 	return 0;
 }
 
