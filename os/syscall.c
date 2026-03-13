@@ -81,11 +81,20 @@ int sys_task_info(struct TaskInfo *info) {
 	return 0;
 }
 
+/* params:
+start: starting index of the virtual mem
+
+*/
 uint64 sys_mmap(uint64 start, uint64 len, int port, int flag, int fd) {
 	struct proc *p = curr_proc();
 
+	// start must be page-aligned
+	if (start % PGSIZE != 0) {
+		return -1;
+	}
+
 	if (len == 0) {
-		return -1; // No length
+		return -1; // No length of mapped byte
 	}
 
 	if (len > 1024 * 1024 * 1024) {
@@ -93,14 +102,14 @@ uint64 sys_mmap(uint64 start, uint64 len, int port, int flag, int fd) {
 	}
 
 	if (port & ~0x7) {
-		return -1; // Other bits of port must be 0
+		return -1; // Other bits of port must be 0 (like 1101)
 	}
 
 	if ((port & 0x7) == 0) {
 		return -1; // Cannot R, W, or X the memory
 	}
 
-	// Convert port into PTE perm bits. I.e. 010 = PTE_W
+	// Convert port into PTE permission bits. I.e. 010 = PTE_W
 	int perm = 0;
 	if (port & 0x1) {
 		perm |= PTE_R;
@@ -111,13 +120,50 @@ uint64 sys_mmap(uint64 start, uint64 len, int port, int flag, int fd) {
 	if (port & 0x4) {
 		perm |= PTE_X;
 	}
+	perm |= PTE_U; // user
 
-	// TODO: request anon physical mem addr?
+	uint64 a = PGROUNDUP(len);
+	while (a > 0) {
+		void *pa = kalloc(); // pa is a ptr to physical memory page
+		if (pa == 0) {
+			return -1;
+		}
+		if (mappages(p->pagetable, start, PGSIZE, (uint64) pa, perm) != 0) {
+			return -1; // walkaddr couldn't allocate a page (page possibly already exists)
+		}
 
-	// TODO: check that no page exists already from [start, start + len) using walkaddr()
+		a -= PGSIZE;
+		start += PGSIZE;
+	}
 
-	// TODO: allocate physical pages using mappages(). Use uvmunmap() to free pages if necessary
-	// return mappages(p->pagetable, start, len, , port)
+	return 0;
+}
+
+/* params:
+len: length of mapped byte
+*/
+uint64 sys_munmap(uint64 start, uint64 len) {
+	struct proc *p = curr_proc();
+
+	// start must be page-aligned
+	if (start % PGSIZE != 0) {
+		return -1;
+	}
+
+	if (len == 0) {
+		return -1;
+	}
+
+	int num_pages = PGROUNDUP(len) / PGSIZE;
+
+	uint64 b = start;
+	for (; b < start + num_pages * PGSIZE; b += PGSIZE) {
+		if (useraddr(p->pagetable, b) == 0) {
+			return -1; // Can't unmap an already unmapped page
+		}
+		uvmunmap(p->pagetable, b, 1, 0); // Remove 1 pg from va
+	}
+
 	return 0;
 }
 
@@ -151,6 +197,12 @@ void syscall()
 		break;
 	case SYS_task_info:
 		ret = sys_task_info((struct TaskInfo *)args[0]); // TODO: no struct
+		break;
+	case SYS_mmap:
+		ret = sys_mmap(args[0], args[1], args[2], args[3], args[4]);
+		break;
+	case SYS_munmap:
+		ret = sys_munmap(args[0], args[1]);
 		break;
 	default:
 		ret = -1;
