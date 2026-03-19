@@ -88,7 +88,7 @@ start: starting index of the virtual mem
 uint64 sys_mmap(uint64 start, uint64 len, int port, int flag, int fd) {
 	struct proc *p = curr_proc();
 
-	// start must be page-aligned
+	// start must be page-aligned (virtual mem)
 	if (start % PGSIZE != 0) {
 		return -1;
 	}
@@ -157,7 +157,7 @@ uint64 sys_munmap(uint64 start, uint64 len) {
 	int num_pages = PGROUNDUP(len) / PGSIZE;
 
 	uint64 b = start;
-	for (; b < start + num_pages * PGSIZE; b += PGSIZE) {
+	for (; b < start + num_pages * PGSIZE; b += PGSIZE) { // Loop thru to unmap virtual mem
 		if (useraddr(p->pagetable, b) == 0) {
 			return -1; // Can't unmap an already unmapped page
 		}
