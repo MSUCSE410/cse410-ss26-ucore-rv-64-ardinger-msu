@@ -60,7 +60,7 @@ struct proc {
 	uint64 exit_code;
 	struct file *files[FD_BUFFER_SIZE];
 
-	struct TaskInfo task_info
+	struct TaskInfo task_info;
 };
 
 int cpuid();

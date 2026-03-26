@@ -131,7 +131,9 @@ void scheduler()
 			p->task_info.time = get_cycle()*1000/CPU_FREQ;
 		}
 
+		p->task_info.status = Running;
 		p->state = RUNNING;
+		
 		current_proc = p;
 		swtch(&idle.context, &p->context);
 	}
