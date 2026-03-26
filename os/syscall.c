@@ -104,15 +104,42 @@ uint64 sys_wait(int pid, uint64 va)
 	return wait(pid, code);
 }
 
+/* params:
+va: va space of a program name
+*/
 uint64 sys_spawn(uint64 va)
 {
 	// TODO: your job is to complete the sys call
-	return -1;
+	struct proc *p = curr_proc();
+    char name[200];
+    if (copyinstr(p->pagetable, name, va, 200) < 0) {
+        return -1; // Invalid va or filename
+    }
+
+	int pid = fork();
+	if (pid < 0) {
+		return -1;
+	}
+
+	if (pid == 0) { // Child proc
+		int ret = exec(name);
+        if (ret < 0) {
+            exit(1);
+        }
+	}
+
+	return pid; // Parent return child proc
 }
 
 uint64 sys_set_priority(long long prio){
     // TODO: your job is to complete the sys call
-    return -1;
+	if (prio < 2 || prio > ISIZE_MAX) {
+		return -1;
+	}
+	struct proc *p = curr_proc();
+    p->prio = prio;
+    p->pass = BIG_STRIDE / prio;
+    return prio;
 }
 
 /*
@@ -279,6 +306,9 @@ void syscall()
 		break;
 	case SYS_munmap:
 		ret = sys_munmap(args[0], args[1]);
+		break;
+	case SYS_setpriority:
+		ret = sys_set_priority((long long)args[0]);
 		break;
 	default:
 		ret = -1;

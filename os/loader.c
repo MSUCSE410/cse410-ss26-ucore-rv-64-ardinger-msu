@@ -83,6 +83,10 @@ int bin_loader(uint64 start, uint64 end, struct proc *p)
 	memset(p->task_info.syscall_times, 0, sizeof(p->task_info.syscall_times));
 	p->task_info.time = 0;
 
+	p->stride = 0;
+	p->prio = 16;
+	p->pass = BIG_STRIDE / p->prio;
+
 	return 0;
 }
 

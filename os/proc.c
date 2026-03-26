@@ -38,6 +38,10 @@ void proc_init()
 		p->task_info.status = UnInit;
 		memset(p->task_info.syscall_times, 0, sizeof(p->task_info.syscall_times));
 		p->task_info.time = 0;
+
+		p->stride = 0;
+		p->prio = 16;
+		p->pass = BIG_STRIDE / p->prio;
 	}
 	idle.kstack = (uint64)boot_stack_top;
 	idle.pid = IDLE_PID;
@@ -53,13 +57,39 @@ int allocpid()
 
 struct proc *fetch_task()
 {
-	int index = pop_queue(&task_queue);
-	if (index < 0) {
+	// Proj 1 queue-based approach to picking next proc
+
+	// int index = pop_queue(&task_queue);
+	// if (index < 0) {
+	// 	debugf("No task to fetch\n");
+	// 	return NULL;
+	// }
+	// debugf("fetch task %d(pid=%d) to task queue\n", index, pool[index].pid);
+	// return pool + index;
+
+	if (task_queue.empty == 1) {
 		debugf("No task to fetch\n");
-		return NULL;
+        return NULL;
 	}
-	debugf("fetch task %d(pid=%d) to task queue\n", index, pool[index].pid);
-	return pool + index;
+
+	int p = task_queue.front;
+    int i = (task_queue.front + 1) % QUEUE_SIZE;
+    while (i != task_queue.tail) {
+        if (pool[task_queue.data[i]].stride < pool[task_queue.data[p]].stride) {
+            p = i;
+        }
+        i = (i + 1) % QUEUE_SIZE;
+    }
+
+	// Swap chosen (p) to front and pop it
+    int tmp = task_queue.data[p];
+    task_queue.data[p] = task_queue.data[task_queue.front];
+    task_queue.data[task_queue.front] = tmp;
+
+	int index = pop_queue(&task_queue);
+    pool[index].stride += pool[index].pass; // Increase stride by pass
+
+    return &pool[index]; // return proc
 }
 
 void add_task(struct proc *p)
@@ -95,6 +125,9 @@ found:
 	memset((void *)p->trapframe, 0, TRAP_PAGE_SIZE);
 	p->context.ra = (uint64)usertrapret;
 	p->context.sp = p->kstack + KSTACK_SIZE;
+	p->stride = 0;
+	p->prio = 16;
+	p->pass = BIG_STRIDE / p->prio;
 	return p;
 }
 
