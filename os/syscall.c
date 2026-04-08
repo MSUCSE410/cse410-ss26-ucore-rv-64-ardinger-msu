@@ -109,26 +109,36 @@ va: va space of a program name
 */
 uint64 sys_spawn(uint64 va)
 {
-	// TODO: your job is to complete the sys call
 	struct proc *p = curr_proc();
+    struct proc *np = NULL; // np = new proc
     char name[200];
-    if (copyinstr(p->pagetable, name, va, 200) < 0) {
-        return -1; // Invalid va or filename
+
+    if (copyinstr(p->pagetable, name, va, 200) < 0) { // Copy filename from user va because kernel can't directly deref user ptrs
+        return -1;
     }
 
-	int pid = fork();
-	if (pid < 0) {
-		return -1;
-	}
+    // Find app id by name. App registry is list of programs in kernel
+    int id = get_id_by_name(name);
+    if (id < 0)
+        return -1;
 
-	if (pid == 0) { // Child proc
-		int ret = exec(name);
-        if (ret < 0) {
-            exit(1);
-        }
-	}
+    // Allocate new process directly
+    np = allocproc();
+    if (np == 0)
+        return -1;
 
-	return pid; // Parent return child proc
+    np->parent = p;
+
+    // Load program directly into new process
+    if (loader(id, np) < 0) {
+        np->state = UNUSED;
+        return -1;
+    }
+
+    np->state = RUNNABLE;
+    // add_task(np);
+
+    return np->pid;
 }
 
 uint64 sys_set_priority(long long prio){

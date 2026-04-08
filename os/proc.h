@@ -8,7 +8,7 @@
 #define NPROC (512)
 #define FD_BUFFER_SIZE (16)
 #define MAX_SYSCALL_NUM (500)
-#define BIG_STRIDE (16)
+#define BIG_STRIDE (65536)
 #define ISIZE_MAX (16)
 
 struct file;

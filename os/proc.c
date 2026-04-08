@@ -140,35 +140,33 @@ void scheduler()
 {
 	struct proc *p;
 	for (;;) {
-		/*int has_proc = 0;
+		struct proc *min_proc = NULL;
+
+		// Select the proc w smallest stride
 		for (p = pool; p < &pool[NPROC]; p++) {
 			if (p->state == RUNNABLE) {
-				has_proc = 1;
-				tracef("swtich to proc %d", p - pool);
-				p->state = RUNNING;
-				current_proc = p;
-				swtch(&idle.context, &p->context);
+				if (min_proc == NULL || p->stride < min_proc->stride)
+					min_proc = p;
 			}
 		}
-		if(has_proc == 0) {
-			panic("all app are over!\n");
-		}*/
-		p = fetch_task();
-		if (p == NULL) {
+
+		if (min_proc == NULL) {
 			panic("all app are over!\n");
 		}
-		tracef("swtich to proc %d", p - pool);
 
 		// Proj 1 set task info time
-		if (p->task_info.time == 0){ 
-			p->task_info.time = get_cycle()*1000/CPU_FREQ;
-		}
+		// if (p->task_info.time == 0){ 
+		// 	p->task_info.time = get_cycle()*1000/CPU_FREQ;
+		// }
+		// p->task_info.status = Running;
 
-		p->task_info.status = Running;
-		p->state = RUNNING;
+		// Update stride
+		min_proc->stride += min_proc->pass;
+
+		min_proc->state = RUNNING;
 		
-		current_proc = p;
-		swtch(&idle.context, &p->context);
+		current_proc = min_proc;
+		swtch(&idle.context, &min_proc->context); // Start running the proc
 	}
 }
 
@@ -191,7 +189,7 @@ void sched()
 void yield()
 {
 	current_proc->state = RUNNABLE;
-	add_task(current_proc);
+	// add_task(current_proc);
 	sched();
 }
 
@@ -231,7 +229,7 @@ int fork()
 	np->trapframe->a0 = 0;
 	np->parent = p;
 	np->state = RUNNABLE;
-	add_task(np);
+	// add_task(np);
 	return np->pid;
 }
 
@@ -273,7 +271,7 @@ int wait(int pid, int *code)
 			return -1;
 		}
 		p->state = RUNNABLE;
-		add_task(p);
+		// add_task(p);
 		sched();
 	}
 }
