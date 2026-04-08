@@ -120,12 +120,12 @@ uint64 sys_spawn(uint64 va)
     // Find app id by name. App registry is list of programs in kernel
     int id = get_id_by_name(name);
     if (id < 0)
-        return -1;
+        return -1; // Invalid filename
 
     // Allocate new process directly
     np = allocproc();
     if (np == 0)
-        return -1;
+        return -1; // Full proc pool
 
     np->parent = p;
 
@@ -135,7 +135,7 @@ uint64 sys_spawn(uint64 va)
         return -1;
     }
 
-    np->state = RUNNABLE;
+    np->state = RUNNABLE; // Scheduler will pick up runnable tasks, don't need to add it to queue
     // add_task(np);
 
     return np->pid;
@@ -143,12 +143,12 @@ uint64 sys_spawn(uint64 va)
 
 uint64 sys_set_priority(long long prio){
     // TODO: your job is to complete the sys call
-	if (prio < 2 || prio > ISIZE_MAX) {
+	if (prio < 2 || prio > ISIZE_MAX) { // prio must be within [2, isize_max]
 		return -1;
 	}
 	struct proc *p = curr_proc();
     p->prio = prio;
-    p->pass = BIG_STRIDE / prio;
+    p->pass = BIG_STRIDE / prio; // Makes time allocated to each process proportional to prio
     return prio;
 }
 
