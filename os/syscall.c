@@ -127,10 +127,10 @@ uint64 sys_spawn(uint64 va)
     if (np == 0)
         return -1; // Full proc pool
 
-    np->parent = p;
+    np->parent = p; // Like fork()
 
     // Load program directly into new process
-    if (loader(id, np) < 0) {
+    if (loader(id, np) < 0) { // Like exec()
         np->state = UNUSED;
         return -1;
     }
