@@ -50,6 +50,11 @@ int bin_loader(struct inode *ip, struct proc *p)
 	memset(p->task_info.syscall_times, 0, sizeof(p->task_info.syscall_times));
 	p->task_info.time = 0;
 
+	// Proj 3 fields
+	p->stride = 0;
+	p->prio = 16;
+	p->pass = BIG_STRIDE / p->prio;
+
 	return 0;
 }
 

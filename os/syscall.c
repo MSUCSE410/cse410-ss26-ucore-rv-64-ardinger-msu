@@ -154,16 +154,53 @@ uint64 sys_wait(int pid, uint64 va)
 	return wait(pid, code);
 }
 
+/* params:
+va: va space of a program name
+*/
 uint64 sys_spawn(uint64 va)
 {
-	// TODO: your job is to complete the sys call
-	return -1;
+	struct proc *p = curr_proc();
+    struct proc *np = NULL; // np = new proc
+    char name[200];
+
+    if (copyinstr(p->pagetable, name, va, 200) < 0) { // Copy filename from user va because kernel can't directly deref user ptrs
+        return -1;
+    }
+
+    // Find app id by name. App registry is list of programs in kernel
+    int id = get_id_by_name(name);
+    if (id < 0)
+        return -1;
+
+    // Allocate new process directly
+    np = allocproc();
+    if (np == 0)
+        return -1;
+
+    np->parent = p;
+
+    // Load program directly into new process
+    if (loader(id, np) < 0) {
+        np->state = UNUSED;
+        return -1;
+    }
+
+    np->state = RUNNABLE;
+    // add_task(np);
+
+    return np->pid;
 }
 
 uint64 sys_set_priority(long long prio)
 {
 	// TODO: your job is to complete the sys call
-	return -1;
+	if (prio < 2 || prio > ISIZE_MAX) {
+		return -1;
+	}
+	struct proc *p = curr_proc();
+    p->prio = prio;
+    p->pass = BIG_STRIDE / prio;
+    return prio;
 }
 
 /*
@@ -383,6 +420,9 @@ void syscall()
 		break;
 	case SYS_munmap:
 		ret = sys_munmap(args[0], args[1]);
+		break;
+	case SYS_setpriority:
+		ret = sys_set_priority((long long)args[0]);
 		break;
 	default:
 		ret = -1;
