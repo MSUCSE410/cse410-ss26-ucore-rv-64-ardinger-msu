@@ -8,7 +8,7 @@ if __name__ == '__main__':
     f = open("os/initproc.S", mode="w")
     f.write(
 '''
-    .global INIT_PROC
-INIT_PROC:
+    .global _init_proc_name
+_init_proc_name:
     .string \"{0}\"
 '''.format(args.INIT_PROC));

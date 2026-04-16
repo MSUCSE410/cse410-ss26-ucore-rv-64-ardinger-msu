@@ -3,7 +3,28 @@
 #include "file.h"
 #include "trap.h"
 
-extern char INIT_PROC[];
+static int app_num;
+// static uint64 *app_info_ptr;
+extern char _app_num[], _app_names[], _init_proc_name[];
+char names[MAX_APP_NUM][MAX_STR_LEN];
+
+int get_id_by_name(char *name)
+{
+	for (int i = 0; i < app_num; ++i) {
+		if (strncmp(name, names[i], 100) == 0)
+			return i;
+	}
+	warnf("Cannot find such app %s", name);
+	return -1;
+}
+
+int loader(int app_id, struct proc *p)
+{
+	// This will fail because bin_loader takes an inode now
+	// return bin_loader(app_info_ptr[app_id], p);
+	warnf("Bin loader needs an inode");
+	return -1;
+}
 
 int bin_loader(struct inode *ip, struct proc *p)
 {
@@ -64,15 +85,15 @@ int load_init_app()
 	struct inode *ip;
 	struct proc *p = allocproc();
 	init_stdio(p);
-	if ((ip = namei(INIT_PROC)) == 0) {
+	if ((ip = namei(_init_proc_name)) == 0) {
 		errorf("invalid init proc name\n");
 		return -1;
 	}
-	debugf("load init app %s", INIT_PROC);
+	debugf("load init app %s", _init_proc_name);
 	bin_loader(ip, p);
 	iput(ip);
 	char *argv[2];
-	argv[0] = INIT_PROC;
+	argv[0] = _init_proc_name;
 	argv[1] = NULL;
 	p->trapframe->a0 = push_argv(p, argv);
 	add_task(p);
