@@ -5,6 +5,7 @@
 #include "syscall_ids.h"
 #include "timer.h"
 #include "trap.h"
+#include "vm.h"
 
 uint64 console_write(uint64 va, uint64 len)
 {
@@ -85,12 +86,23 @@ uint64 sys_sched_yield()
 
 uint64 sys_gettimeofday(uint64 val, int _tz)
 {
+	// YOUR CODE
 	struct proc *p = curr_proc();
+
+	uint64 phys = useraddr(p->pagetable, (uint64)val); // Map VA to PA
+	if (phys == 0) {
+		return -1; // Bad addr
+	}
+
+	// val param cannot be accessed by the kernel now that we're using virtual memory
+	// Saves us from deref
+	TimeVal *new_val = (TimeVal *)phys; // Cast PA as a time value ptr
+
+	/* The code in `ch3` will leads to memory bugs*/
+
 	uint64 cycle = get_cycle();
-	TimeVal t;
-	t.sec = cycle / CPU_FREQ;
-	t.usec = (cycle % CPU_FREQ) * 1000000 / CPU_FREQ;
-	copyout(p->pagetable, val, (char *)&t, sizeof(TimeVal));
+	new_val->sec = cycle / CPU_FREQ;
+	new_val->usec = (cycle % CPU_FREQ) * 1000000 / CPU_FREQ;
 	return 0;
 }
 
@@ -160,15 +172,107 @@ uint64 sys_set_priority(long long prio)
 int sys_task_info(struct TaskInfo *info) {
 	struct proc *p = curr_proc();
 
-	for (int i = 0; i < MAX_SYSCALL_NUM; i++) // TODO: change 500
-	{
-		info->syscall_times[i] = p->task_info.syscall_times[i];
+	uint64 phys = useraddr(p->pagetable, (uint64)info); // Map VA to PA
+	if (phys == 0) {
+		return -1; // Bad addr
 	}
 
+	// info param cannot be accessed by the kernel now that we're using virtual memory
+	struct TaskInfo * new_info = (struct TaskInfo *)phys; // Cast PA to TaskInfo ptr
+	new_info->status = p->task_info.status;
+
+	// Copy syscall counts from current process to new task info using VA
+	memmove(new_info->syscall_times, p->task_info.syscall_times, sizeof(p->task_info.syscall_times));
+
 	uint64 curr_time = get_cycle()*1000/CPU_FREQ;
-	info->status = Running;
-	// p->task_info.syscall_times[SYS_task_info]++;
-	info->time = curr_time - p->task_info.time; // int?
+	new_info->time = curr_time - p->task_info.time; // int?
+
+	return 0;
+}
+
+/* params:
+start: starting index of the virtual mem
+
+*/
+uint64 sys_mmap(uint64 start, uint64 len, int port, int flag, int fd) {
+	struct proc *p = curr_proc();
+
+	// start must be page-aligned
+	if (start % PGSIZE != 0) {
+		return -1;
+	}
+
+	if (len == 0) {
+		return -1; // No length of mapped byte
+	}
+
+	if (len > 1024 * 1024 * 1024) {
+		return -1; // Length is larger than 1 GB
+	}
+
+	if (port & ~0x7) {
+		return -1; // Other bits of port must be 0 (like 1101)
+	}
+
+	if ((port & 0x7) == 0) {
+		return -1; // Cannot R, W, or X the memory
+	}
+
+	// Convert port into PTE permission bits. I.e. 010 = PTE_W
+	int perm = 0;
+	if (port & 0x1) {
+		perm |= PTE_R;
+	}
+	if (port & 0x2) {
+		perm |= PTE_W;
+	}
+	if (port & 0x4) {
+		perm |= PTE_X;
+	}
+	perm |= PTE_U; // user
+
+	uint64 a = PGROUNDUP(len);
+	while (a > 0) {
+		void *pa = kalloc(); // pa is a ptr to physical memory page
+		if (pa == 0) {
+			return -1;
+		}
+		if (mappages(p->pagetable, start, PGSIZE, (uint64) pa, perm) != 0) {
+			return -1; // walkaddr couldn't allocate a page (page possibly already exists)
+		}
+
+		a -= PGSIZE;
+		start += PGSIZE;
+	}
+
+	return 0;
+}
+
+/* params:
+len: length of mapped byte
+*/
+uint64 sys_munmap(uint64 start, uint64 len) {
+	struct proc *p = curr_proc();
+
+	// start must be page-aligned
+	if (start % PGSIZE != 0) {
+		return -1;
+	}
+
+	if (len == 0) {
+		return -1;
+	}
+
+	int num_pages = PGROUNDUP(len) / PGSIZE;
+
+	uint64 b = start;
+	for (; b < start + num_pages * PGSIZE; b += PGSIZE) {
+		if (useraddr(p->pagetable, b) == 0) {
+			return -1; // Can't unmap an already unmapped page
+		}
+		uvmunmap(p->pagetable, b, 1, 0); // Remove 1 pg from va
+	}
+
 	return 0;
 }
 
@@ -273,6 +377,12 @@ void syscall()
 		break;
 	case SYS_task_info:
 		ret = sys_task_info((struct TaskInfo *)args[0]); // TODO: no struct
+		break;
+	case SYS_mmap:
+		ret = sys_mmap(args[0], args[1], args[2], args[3], args[4]);
+		break;
+	case SYS_munmap:
+		ret = sys_munmap(args[0], args[1]);
 		break;
 	default:
 		ret = -1;
