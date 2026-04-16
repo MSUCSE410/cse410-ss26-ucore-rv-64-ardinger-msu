@@ -4,6 +4,7 @@
 #include "trap.h"
 #include "vm.h"
 #include "queue.h"
+#include "timer.h"
 
 struct proc pool[NPROC];
 __attribute__((aligned(16))) char kstack[NPROC][PAGE_SIZE];
@@ -37,6 +38,11 @@ void proc_init()
 		p->state = UNUSED;
 		p->kstack = (uint64)kstack[p - pool];
 		p->trapframe = (struct trapframe *)trapframe[p - pool];
+
+		// Proj 1 init new fields
+		p->task_info.status = UnInit;
+		memset(p->task_info.syscall_times, 0, sizeof(p->task_info.syscall_times));
+		p->task_info.time = 0;
 	}
 	idle.kstack = (uint64)boot_stack_top;
 	idle.pid = IDLE_PID;
@@ -137,6 +143,12 @@ void scheduler()
 			panic("all app are over!\n");
 		}
 		tracef("swtich to proc %d", p - pool);
+
+		// Proj 1 set task info time
+		if (p->task_info.time == 0){ 
+			p->task_info.time = get_cycle()*1000/CPU_FREQ;
+		}
+
 		p->state = RUNNING;
 		current_proc = p;
 		swtch(&idle.context, &p->context);

@@ -154,6 +154,24 @@ uint64 sys_set_priority(long long prio)
 	return -1;
 }
 
+/*
+* Proj 1 define sys_task_info here
+*/
+int sys_task_info(struct TaskInfo *info) {
+	struct proc *p = curr_proc();
+
+	for (int i = 0; i < MAX_SYSCALL_NUM; i++) // TODO: change 500
+	{
+		info->syscall_times[i] = p->task_info.syscall_times[i];
+	}
+
+	uint64 curr_time = get_cycle()*1000/CPU_FREQ;
+	info->status = Running;
+	// p->task_info.syscall_times[SYS_task_info]++;
+	info->time = curr_time - p->task_info.time; // int?
+	return 0;
+}
+
 uint64 sys_openat(uint64 va, uint64 omode, uint64 _flags)
 {
 	struct proc *p = curr_proc();
@@ -202,6 +220,9 @@ void syscall()
 			   trapframe->a3, trapframe->a4, trapframe->a5 };
 	tracef("syscall %d args = [%x, %x, %x, %x, %x, %x]", id, args[0],
 	       args[1], args[2], args[3], args[4], args[5]);
+
+	curr_proc()->task_info.syscall_times[id]++;
+
 	switch (id) {
 	case SYS_write:
 		ret = sys_write(args[0], args[1], args[2]);
@@ -249,6 +270,9 @@ void syscall()
 	    ret = sys_unlinkat(args[0],args[1],args[2]);
 	case SYS_spawn:
 		ret = sys_spawn(args[0]);
+		break;
+	case SYS_task_info:
+		ret = sys_task_info((struct TaskInfo *)args[0]); // TODO: no struct
 		break;
 	default:
 		ret = -1;
