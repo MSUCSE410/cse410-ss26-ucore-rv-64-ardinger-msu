@@ -336,19 +336,133 @@ uint64 sys_close(int fd)
 	return 0;
 }
 
+/**
+ * fd: file descriptor
+ * stat: userspace va of a Stat
+ */
 int sys_fstat(int fd,uint64 stat){
 	//TODO: your job is to complete the syscall
-	return -1;
+	if (fd < 0 || fd > FD_BUFFER_SIZE)
+		return -1; // fd is invalid
+
+	struct proc *p = curr_proc();
+	struct file *f = p->files[fd];
+
+	if (f == NULL) {
+		return -1; // fd is not open
+	}
+
+	ivalid(f->ip); // Ensure inode is valid from disk
+
+	Stat st;
+	st.dev = 0;
+	st.ino = f->ip->inum;
+	st.mode = f->ip->type == T_DIR ? DIR : FILE;
+	st.nlink = f->ip->nlink;
+	
+	if (copyout(p->pagetable, stat, (char *)&st, sizeof(st)) < 0) {
+		return -1;
+	}
+
+	return 0;
 }
 
+/**
+ * oldpath: userspace va
+ */
 int sys_linkat(int olddirfd, uint64 oldpath, int newdirfd, uint64 newpath, uint64 flags){
 	//TODO: your job is to complete the syscall
-	return -1;
+	char old_name[MAX_STR_LEN], new_name[MAX_STR_LEN];
+
+	if (copyinstr(curr_proc()->pagetable, old_name, oldpath, MAX_STR_LEN) < 0 || copyinstr(curr_proc()->pagetable, new_name, newpath, MAX_STR_LEN) < 0 ) { // copy strings from user to kernel
+		return -1;
+	}
+
+	if (strncmp(old_name, new_name, MAX_STR_LEN) == 0) {
+		return -1; // old and new path cannot be the same
+	}
+
+	struct inode *ip = namei(old_name);
+	if (ip == NULL) {
+		return -1;
+	}
+
+	if (ip->type == T_DIR) {
+		iput(ip);
+		return -1;
+	}
+
+	ip->nlink++;
+	iupdate(ip);
+
+	struct inode *dp = root_dir();
+	ivalid(dp);
+
+	// Prevent cross-device links becase inums only unique to a device
+	if (dp->dev != ip->dev || dirlink(dp, new_name, ip->inum) < 0) { // Write new dir entry into the dp
+		iput(dp);
+		
+		// Update links on failure
+		ip->nlink--;
+		iupdate(ip);
+		iput(ip);
+		return -1;
+	}
+
+	iput(dp);
+	iput(ip);
+
+	return 0;
 }
 
+/**
+ * name: file path in userspace va
+ */
 int sys_unlinkat(int dirfd, uint64 name, uint64 flags){
 	//TODO: your job is to complete the syscall
-	return -1;
+	char path_name[MAX_STR_LEN];
+
+	if (copyinstr(curr_proc()->pagetable, path_name, name, MAX_STR_LEN) < 0) { // copy strings from user to kernel
+		return -1;
+	}
+
+	struct inode *ip = namei(path_name);
+	if (ip == NULL) {
+		return -1;
+	}
+
+	if (ip->type == T_DIR) {
+		// iunlockput(ip);
+		iput(ip);
+		return -1;
+	}
+
+	struct inode *dp = root_dir();
+	ivalid(dp);
+	struct dirent de;
+	int off;
+
+	// Find matching dirent like in dirlink (where we find empty dirent)
+	for (off = 0; off < dp->size; off += sizeof(de)) {
+		if(readi(dp, 0, (uint64)&de, off, sizeof(de)) != sizeof(de))
+			panic("unlinkat readi");
+		if (de.inum == ip->inum && strncmp(de.name, path_name, DIRSIZ) == 0) {
+			memset(&de, 0, sizeof(de)); // Clear dirent
+			if (writei(dp, 0, (uint64)&de, off, sizeof(de)) != sizeof(de))
+				panic("unlinkat writei");
+			break;
+		}
+	}
+
+	iput(dp);
+
+	ivalid(ip);
+	printf("unlinkat: inum=%d nlink=%d ref=%d valid=%d", ip->inum, ip->nlink, ip->ref, ip->valid);
+	ip->nlink--;
+	iupdate(ip);
+	iput(ip);
+	
+	return 0;
 }
 
 extern char trap_page[];
@@ -409,6 +523,7 @@ void syscall()
 		break;
 	case SYS_unlinkat:
 	    ret = sys_unlinkat(args[0],args[1],args[2]);
+		break;
 	case SYS_spawn:
 		ret = sys_spawn(args[0]);
 		break;
