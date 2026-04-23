@@ -289,7 +289,7 @@ int deadlock_detect(const int available[LOCK_POOL_SIZE], const int allocation[NT
 					finish[i] = 1;
 					progress = 1;
 					for (int j = 0; j < LOCK_POOL_SIZE; j++) {
-						work[j] += allocation[i][j];
+						work[j] += allocation[i][j]; // Release allocated resources
 					}
 				}
 			}
@@ -339,7 +339,7 @@ int sys_mutex_lock(int mutex_id)
 		}
 	}
 
-	mutex_lock(&curr_proc()->mutex_pool[mutex_id]);
+	mutex_lock(&curr_proc()->mutex_pool[mutex_id]); // Must lock the mutext first
 
 	// Lock acquired - request to alloc
 	curr_proc()->mutex_request[curr_thread()->tid][mutex_id] = 0;
@@ -388,7 +388,7 @@ int sys_semaphore_up(int semaphore_id)
 		return -1;
 	}
 	// LAB5: (4-2) You may want to maintain some variables for detect here
-	if (p->sem_allocation[curr_thread()->tid][semaphore_id] > 0) {
+	if (p->sem_allocation[curr_thread()->tid][semaphore_id] > 0) { // Don't let sem count go below 0
 		p->sem_allocation[curr_thread()->tid][semaphore_id] -= 1;
 	}
 	p->sem_available[semaphore_id]++; // Increment available resources
@@ -415,7 +415,7 @@ int sys_semaphore_down(int semaphore_id)
 		}
 	}
 
-	semaphore_down(&curr_proc()->semaphore_pool[semaphore_id]);
+	semaphore_down(&curr_proc()->semaphore_pool[semaphore_id]); // Must down the sem first
 
 	curr_proc()->sem_request[curr_thread()->tid][semaphore_id] = 0;
 	curr_proc()->sem_allocation[curr_thread()->tid][semaphore_id]++;
