@@ -360,7 +360,7 @@ int sys_fstat(int fd,uint64 stat){
 	st.mode = f->ip->type == T_DIR ? DIR : FILE;
 	st.nlink = f->ip->nlink;
 	
-	if (copyout(p->pagetable, stat, (char *)&st, sizeof(st)) < 0) {
+	if (copyout(p->pagetable, stat, (char *)&st, sizeof(st)) < 0) { // Copy stat from kernel (st) to user (stat)
 		return -1;
 	}
 
@@ -374,7 +374,7 @@ int sys_linkat(int olddirfd, uint64 oldpath, int newdirfd, uint64 newpath, uint6
 	//TODO: your job is to complete the syscall
 	char old_name[MAX_STR_LEN], new_name[MAX_STR_LEN];
 
-	if (copyinstr(curr_proc()->pagetable, old_name, oldpath, MAX_STR_LEN) < 0 || copyinstr(curr_proc()->pagetable, new_name, newpath, MAX_STR_LEN) < 0 ) { // copy strings from user to kernel
+	if (copyinstr(curr_proc()->pagetable, old_name, oldpath, MAX_STR_LEN) < 0 || copyinstr(curr_proc()->pagetable, new_name, newpath, MAX_STR_LEN) < 0 ) { // copy strings from user (oldpath) to kernel
 		return -1;
 	}
 
@@ -387,13 +387,13 @@ int sys_linkat(int olddirfd, uint64 oldpath, int newdirfd, uint64 newpath, uint6
 		return -1;
 	}
 
-	if (ip->type == T_DIR) {
-		iput(ip);
+	if (ip->type == T_DIR) { // Can't hard link to dir, could create a cycle
+		iput(ip); // clean up inode ref (maybe on disk, too)
 		return -1;
 	}
 
 	ip->nlink++;
-	iupdate(ip);
+	iupdate(ip); // copy inode to disk
 
 	struct inode *dp = root_dir();
 	ivalid(dp);
@@ -432,7 +432,6 @@ int sys_unlinkat(int dirfd, uint64 name, uint64 flags){
 	}
 
 	if (ip->type == T_DIR) {
-		// iunlockput(ip);
 		iput(ip);
 		return -1;
 	}
@@ -444,11 +443,11 @@ int sys_unlinkat(int dirfd, uint64 name, uint64 flags){
 
 	// Find matching dirent like in dirlink (where we find empty dirent)
 	for (off = 0; off < dp->size; off += sizeof(de)) {
-		if(readi(dp, 0, (uint64)&de, off, sizeof(de)) != sizeof(de))
+		if(readi(dp, 0, (uint64)&de, off, sizeof(de)) != sizeof(de)) // read from dp data
 			panic("unlinkat readi");
 		if (de.inum == ip->inum && strncmp(de.name, path_name, DIRSIZ) == 0) {
 			memset(&de, 0, sizeof(de)); // Clear dirent
-			if (writei(dp, 0, (uint64)&de, off, sizeof(de)) != sizeof(de))
+			if (writei(dp, 0, (uint64)&de, off, sizeof(de)) != sizeof(de)) // write to dp data
 				panic("unlinkat writei");
 			break;
 		}

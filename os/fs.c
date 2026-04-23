@@ -192,7 +192,7 @@ void ivalid(struct inode *ip)
 		ip->type = dip->type;
 		ip->size = dip->size;
 		// LAB4: You may need to get link count here
-		ip->nlink = dip->nlink;
+		ip->nlink = dip->nlink; // dip = disk inode pointer
 
 		// If disk says the file exists but has 0 links, force to be 1
 		if (ip->type != 0 && ip->nlink == 0) {
